@@ -466,8 +466,10 @@ else:
     grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
 
 history_df = train_evaluate_model(grid_df, M5_FEATURES, TARGET, BASE_PATH)
+history_df.to_pickle(f'{BASE_PATH}/history.pkl')
 
 base_test = get_base_test(BASE_PATH)
 
 final_all_preds = predict_test(base_test, M5_FEATURES, TARGET, BASE_PATH)
+history_df.to_csv(f'{BASE_PATH}/submission.csv', index=False)
 
