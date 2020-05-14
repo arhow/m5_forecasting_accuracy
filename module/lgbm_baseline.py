@@ -20,7 +20,7 @@ START_TRAIN = 0                  # We can skip some rows (Nans/faster training)
 END_TRAIN   = 1913               # End day of our train set
 P_HORIZON   = 28                 # Prediction horizon
 USE_AUX     = False               # Use or not pretrained models
-BASE_PATH  = '../cache'
+BASE_PATH  = f'../cache/ver{VER}'
 TEMP_FEATURE_PKL =  f'{BASE_PATH}/grid_features.pkl'
 lgb_params = {
                     'boosting_type': 'gbdt',
@@ -452,7 +452,14 @@ train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
 prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
 calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
 
-if os.path.exists(TEMP_FEATURE_PKL):
+try:
+    os.makedirs(BASE_PATH)
+except OSError:
+    print ("Creation of the directory %s failed" % BASE_PATH)
+else:
+    print ("Successfully created the directory %s" % BASE_PATH)
+
+if not os.path.exists(TEMP_FEATURE_PKL):
     grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, nan_mask_d=1913-28)
     grid_df.to_pickle(TEMP_FEATURE_PKL)
 else:
