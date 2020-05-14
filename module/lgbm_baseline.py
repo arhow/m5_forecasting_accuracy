@@ -134,7 +134,7 @@ def merge_by_concat(df1, df2, merge_on):
 #################################################################################
 def extract_features(train_df, prices_df, calendar_df, target, nan_mask_d=1913-28):
 
-    grid_df = melt_train_df(train_df, prices_df, target)
+    grid_df = melt_train_df(train_df, prices_df, calendar_df, target)
     grid_df = extract_price_features(prices_df, calendar_df, grid_df)
     grid_df = extract_calendar_features(calendar_df, grid_df)
     grid_df = extract_rolling_features(grid_df, target)
@@ -143,7 +143,7 @@ def extract_features(train_df, prices_df, calendar_df, target, nan_mask_d=1913-2
     return grid_df
 
 
-def melt_train_df(train_df, prices_df, target):
+def melt_train_df(train_df, prices_df, calendar_df, target):
     index_columns = ['id', 'item_id', 'dept_id', 'cat_id', 'store_id', 'state_id']
     grid_df = pd.melt(train_df,
                       id_vars=index_columns,
@@ -448,28 +448,28 @@ def predict_test(grid_df, feature_columns, target, base_path):
 
 ########################### RUN
 #################################################################################
-train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
-prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
-calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
-
-try:
-    os.makedirs(BASE_PATH)
-except OSError:
-    print ("Creation of the directory %s failed" % BASE_PATH)
-else:
-    print ("Successfully created the directory %s" % BASE_PATH)
-
-if not os.path.exists(TEMP_FEATURE_PKL):
-    grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, nan_mask_d=1913-28)
-    grid_df.to_pickle(TEMP_FEATURE_PKL)
-else:
-    grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
-
-history_df = train_evaluate_model(grid_df, M5_FEATURES, TARGET, BASE_PATH)
-history_df.to_pickle(f'{BASE_PATH}/history.pkl')
-
-base_test = get_base_test(BASE_PATH)
-
-final_all_preds = predict_test(base_test, M5_FEATURES, TARGET, BASE_PATH)
-history_df.to_csv(f'{BASE_PATH}/submission.csv', index=False)
+# train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
+# prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
+# calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
+#
+# try:
+#     os.makedirs(BASE_PATH)
+# except OSError:
+#     print ("Creation of the directory %s failed" % BASE_PATH)
+# else:
+#     print ("Successfully created the directory %s" % BASE_PATH)
+#
+# if not os.path.exists(TEMP_FEATURE_PKL):
+#     grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, nan_mask_d=1913-28)
+#     grid_df.to_pickle(TEMP_FEATURE_PKL)
+# else:
+#     grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
+#
+# history_df = train_evaluate_model(grid_df, M5_FEATURES, TARGET, BASE_PATH)
+# history_df.to_pickle(f'{BASE_PATH}/history.pkl')
+#
+# base_test = get_base_test(BASE_PATH)
+#
+# final_all_preds = predict_test(base_test, M5_FEATURES, TARGET, BASE_PATH)
+# history_df.to_csv(f'{BASE_PATH}/submission.csv', index=False)
 
