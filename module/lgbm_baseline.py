@@ -289,14 +289,15 @@ def extract_rolling_features(grid_df, target, shift_day=28, verbose=0):
     return grid_df
 
 def extract_sliding_shift_features(grid_df, target):
-    # base_test = grid_df[['id','d',TARGET]]
+    global  base_test
+    base_test = grid_df[['id','d',TARGET]]
     old_tmp_cols = [col for col in list(grid_df) if '_tmp_' in col]
     grid_df = grid_df.drop(columns=old_tmp_cols)
     print(grid_df.shape)
     ROLS_SPLIT = []
     for i in [1, 7, 14]:
         for j in [7, 14, 30, 60]:
-            ROLS_SPLIT.append([grid_df, target, i, j])
+            ROLS_SPLIT.append([target, i, j])
     grid_df = pd.concat([grid_df, _df_parallelize_run(_make_lag_roll, ROLS_SPLIT)], axis=1)
     return grid_df
 
@@ -328,7 +329,7 @@ def _df_parallelize_run(func, t_split):
     return df
 
 def _make_lag_roll(LAG_DAY):
-    base_test, target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2],LAG_DAY[3]
+    target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2]
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
     lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day).rolling(roll_wind).mean())
