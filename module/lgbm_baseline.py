@@ -132,14 +132,26 @@ def merge_by_concat(df1, df2, merge_on):
 
 ########################### feature extract
 #################################################################################
-def extract_features(train_df, prices_df, calendar_df, target, nan_mask_d=1913-28):
-
+def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_mask_d=1913-28):
+    stop_watch = [time.time()]
     grid_df = melt_train_df(train_df, prices_df, calendar_df, target)
+    stop_watch.append(time.time())
+    print(f'melt_train_df {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_price_features(prices_df, calendar_df, grid_df)
+    stop_watch.append(time.time())
+    print(f'extract_price_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_calendar_features(calendar_df, grid_df)
+    stop_watch.append(time.time())
+    print(f'extract_calendar_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_rolling_features(grid_df, target)
+    stop_watch.append(time.time())
+    print(f'extract_rolling_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_encode_features(grid_df, target, nan_mask_d)
+    stop_watch.append(time.time())
+    print(f'extract_encode_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_sliding_shift_features(grid_df, target)
+    stop_watch.append(time.time())
+    print(f'extract_sliding_shift_features {stop_watch[-1]-stop_watch[-2]}')
     return grid_df
 
 
@@ -289,16 +301,18 @@ def extract_rolling_features(grid_df, target, shift_day=28, verbose=0):
     return grid_df
 
 def extract_sliding_shift_features(grid_df, target):
-    global  base_test
-    base_test = grid_df[['id','d',TARGET]]
+    # global  base_test
+    # base_test = grid_df[['id','d',TARGET]]
     old_tmp_cols = [col for col in list(grid_df) if '_tmp_' in col]
     grid_df = grid_df.drop(columns=old_tmp_cols)
     print(grid_df.shape)
     ROLS_SPLIT = []
     for i in [1, 7, 14]:
         for j in [7, 14, 30, 60]:
-            ROLS_SPLIT.append([target, i, j])
-    grid_df = pd.concat([grid_df, _df_parallelize_run(_make_lag_roll, ROLS_SPLIT)], axis=1)
+            ROLS_SPLIT.append([i, j])
+    for item in ROLS_SPLIT:
+        grid_df = pd.concat([grid_df,_make_lag_roll(grid_df[['id','d',target]], target, item[0], time[j])], axis=1)
+     # grid_df = pd.concat([grid_df, _df_parallelize_run(_make_lag_roll, ROLS_SPLIT)], axis=1)
     return grid_df
 
 
@@ -328,8 +342,8 @@ def _df_parallelize_run(func, t_split):
     pool.join()
     return df
 
-def _make_lag_roll(LAG_DAY):
-    target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2]
+def _make_lag_roll(base_test, target, shift_day, roll_wind):
+    # target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2]
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
     lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day).rolling(roll_wind).mean())
