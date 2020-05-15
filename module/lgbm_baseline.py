@@ -311,7 +311,7 @@ def extract_sliding_shift_features(grid_df, target):
         for j in [7, 14, 30, 60]:
             ROLS_SPLIT.append([i, j])
     for item in ROLS_SPLIT:
-        grid_df = pd.concat([grid_df,_make_lag_roll(grid_df[['id','d',target]], target, item[0], time[j])], axis=1)
+        grid_df = pd.concat([grid_df,_make_lag_roll(grid_df[['id','d',target]], target, item[0], time[1])], axis=1)
      # grid_df = pd.concat([grid_df, _df_parallelize_run(_make_lag_roll, ROLS_SPLIT)], axis=1)
     return grid_df
 
