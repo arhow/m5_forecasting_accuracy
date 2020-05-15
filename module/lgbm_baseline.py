@@ -130,6 +130,34 @@ def merge_by_concat(df1, df2, merge_on):
     df1 = pd.concat([df1, merged_gf[new_columns]], axis=1)
     return df1
 
+def reduce_mem_usage(df, verbose=True):
+    numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+    start_mem = df.memory_usage().sum() / 1024**2
+    for col in df.columns:
+        col_type = df[col].dtypes
+        if col_type in numerics:
+            c_min = df[col].min()
+            c_max = df[col].max()
+            if str(col_type)[:3] == 'int':
+                if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
+                    df[col] = df[col].astype(np.int8)
+                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                       df[col] = df[col].astype(np.int16)
+                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                    df[col] = df[col].astype(np.int32)
+                elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
+                    df[col] = df[col].astype(np.int64)
+            else:
+                if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
+                    df[col] = df[col].astype(np.float16)
+                elif c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max:
+                    df[col] = df[col].astype(np.float32)
+                else:
+                    df[col] = df[col].astype(np.float64)
+    end_mem = df.memory_usage().sum() / 1024**2
+    if verbose: print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
+    return df
+
 ########################### feature extract
 #################################################################################
 def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_mask_d=1913-28):
@@ -153,6 +181,10 @@ def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_ma
     stop_watch.append(time.time())
     print(f'extract_sliding_shift_features {stop_watch[-1]-stop_watch[-2]}')
     return grid_df
+
+def get_data_by_store(store_id):
+    grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
+    return grid_df[grid_df['store_id']==store_id].reset_index(drop=False)
 
 
 def melt_train_df(train_df, prices_df, calendar_df, target):
@@ -354,11 +386,14 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     return lag_df[[col_name]]
 
 
-def train_evaluate_model(grid_df, feature_columns, target, base_path):
+def train_evaluate_model(feature_columns, target, base_path):
 
     his = []
     for store_id in STORES_IDS:
         print('Train', store_id)
+
+        grid_df = get_data_by_store(store_id)
+
         train_mask = grid_df['d'] <= END_TRAIN
         preds_mask = grid_df['d'] > (END_TRAIN - 100)
 
@@ -372,10 +407,11 @@ def train_evaluate_model(grid_df, feature_columns, target, base_path):
 
         # Saving part of the dataset for later predictions
         # Removing features that we need to calculate recursively
-        grid_df = grid_df[preds_mask].reset_index(drop=True)
         keep_cols = [col for col in list(grid_df) if '_tmp_' not in col]
-        grid_df = grid_df[keep_cols]
+        grid_df = grid_df[preds_mask].reset_index(drop=True)[keep_cols]
         grid_df.to_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
+
+        del grid_df
 
 
         # Launch seeder again to make lgb training 100% deterministic
@@ -405,7 +441,7 @@ def train_evaluate_model(grid_df, feature_columns, target, base_path):
 
             # Remove temporary files and objects
             # to free some hdd space and ram memory
-            del train_data, valid_data, estimator
+            del train_data, valid_data, estimator, trn_X, val_X, trn_y, val_y
             gc.collect()
 
             his.append({'rmse_val': rmse_val, 'fold_': fold_, 'store_id': store_id})
@@ -467,6 +503,30 @@ def predict_test(grid_df, feature_columns, target, base_path):
 
 ########################### RUN
 #################################################################################
+if not os.path.exists(TEMP_FEATURE_PKL):
+    train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
+    prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
+    calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
+    try:
+        if not os.path.exists(BASE_PATH):
+            os.makedirs(BASE_PATH)
+    except OSError:
+        print("Creation of the directory %s failed" % BASE_PATH)
+    else:
+        print("Successfully created the directory %s" % BASE_PATH)
+
+    grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
+    grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+    grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+    grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+    for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+        grid_df[col] = grid_df[col].replace(
+            dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
+    grid_df = reduce_mem_usage(grid_df)
+    grid_df.to_pickle(TEMP_FEATURE_PKL)
+else:
+    grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
+
 # train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
 # prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
 # calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
@@ -490,5 +550,5 @@ def predict_test(grid_df, feature_columns, target, base_path):
 # base_test = get_base_test(BASE_PATH)
 #
 # final_all_preds = predict_test(base_test, M5_FEATURES, TARGET, BASE_PATH)
-# history_df.to_csv(f'{BASE_PATH}/submission.csv', index=False)
+# final_all_preds.to_csv(f'{BASE_PATH}/submission.csv', index=False)
 
