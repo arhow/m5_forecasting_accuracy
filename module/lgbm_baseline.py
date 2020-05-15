@@ -305,20 +305,24 @@ def extract_sliding_shift_features(grid_df, target):
     # base_test = grid_df[['id','d',TARGET]]
     old_tmp_cols = [col for col in list(grid_df) if '_tmp_' in col]
     grid_df = grid_df.drop(columns=old_tmp_cols)
-    print(grid_df.shape)
     ROLS_SPLIT = []
     for i in [1, 7, 14]:
         for j in [7, 14, 30, 60]:
             ROLS_SPLIT.append([i, j])
+#     N_CORES = psutil.cpu_count()
+#     from joblib import Parallel, delayed
+#     lst = Parallel(n_jobs=N_CORES)(delayed(_make_lag_roll)(grid_df[['id','d',target]], target, item[0], item[1]) for item in ROLS_SPLIT)
+#     grid_df_add = pd.concat(lst, axis=1)
+#     grid_df = pd.concat([grid_df,grid_df_add], axis=1)
     for item in ROLS_SPLIT:
-        grid_df = pd.concat([grid_df,_make_lag_roll(grid_df[['id','d',target]], target, item[0], time[1])], axis=1)
-     # grid_df = pd.concat([grid_df, _df_parallelize_run(_make_lag_roll, ROLS_SPLIT)], axis=1)
+        grid_df_add = _make_lag_roll(grid_df[['id','d',target]], target, item[0], item[1])
+        grid_df = pd.concat([grid_df,grid_df_add], axis=1)
     return grid_df
 
 
 def extract_encode_features(grid_df, target, nan_mask_d):
     base_ = grid_df[['store_id', 'cat_id', 'dept_id', 'item_id', 'tm_dw', TARGET]].copy()
-    base_[TARGET][grid_df['d'] > nan_mask_d] = np.nan
+    base_.loc[grid_df['d'] > nan_mask_d, TARGET] = np.nan
     icols = [
         ['cat_id'],
         ['dept_id'],
