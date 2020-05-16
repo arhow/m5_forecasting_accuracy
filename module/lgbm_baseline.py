@@ -471,19 +471,17 @@ def get_base_test(base_path):
 
     return base_test
 
-    return
-
-def predict_test(grid_df, feature_columns, target, base_path):
+def predict_test(feature_columns, target, base_path):
 
     pridiction_list = []
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
+        base_test = get_base_test(base_path)
         for PREDICT_DAY in range(1, 29):
-            print('Predict | Day:', PREDICT_DAY)
-            start_time = time.time()
+            print(f'FOLD{fold_} Predict | Day:{PREDICT_DAY}')
 
             # Make temporary grid to calculate rolling lags
-            grid_df = grid_df.copy()
+            grid_df = base_test.copy()
             grid_df = extract_sliding_shift_features(grid_df, target)
 
             for store_id in STORES_IDS:
@@ -504,7 +502,8 @@ def predict_test(grid_df, feature_columns, target, base_path):
                 all_preds = all_preds.merge(temp_df, on=['id'], how='left')
             else:
                 all_preds = temp_df.copy()
-            pridiction_list.append(all_preds.reset_index(drop=True))
+            all_preds = all_preds.reset_index(drop=True)
+        pridiction_list.append(all_preds)
 
     final_all_preds = pd.DataFrame()
     final_all_preds['id'] = pridiction_list[0]['id']
@@ -517,52 +516,38 @@ def predict_test(grid_df, feature_columns, target, base_path):
 
 ########################### RUN
 #################################################################################
-if not os.path.exists(TEMP_FEATURE_PKL):
-    train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
-    prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
-    calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
-    try:
-        if not os.path.exists(BASE_PATH):
-            os.makedirs(BASE_PATH)
-    except OSError:
-        print("Creation of the directory %s failed" % BASE_PATH)
-    else:
-        print("Successfully created the directory %s" % BASE_PATH)
+def main():
+    if not os.path.exists(TEMP_FEATURE_PKL):
+        train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
+        prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
+        calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
+        try:
+            if not os.path.exists(BASE_PATH):
+                os.makedirs(BASE_PATH)
+        except OSError:
+            print("Creation of the directory %s failed" % BASE_PATH)
+        else:
+            print("Successfully created the directory %s" % BASE_PATH)
 
-    grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
-    grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-    grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-    grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
-    for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
-        grid_df[col] = grid_df[col].replace(
-            dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
-    grid_df = reduce_mem_usage(grid_df)
-    grid_df.to_pickle(TEMP_FEATURE_PKL)
-else:
-    grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
+        grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
+        grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+        for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+            grid_df[col] = grid_df[col].replace(
+                dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
+        grid_df = reduce_mem_usage(grid_df)
+        grid_df.to_pickle(TEMP_FEATURE_PKL)
 
-# train_df = pd.read_csv(f'{ORI_CSV_PATH}/sales_train_validation.csv')
-# prices_df = pd.read_csv(f'{ORI_CSV_PATH}/sell_prices.csv')
-# calendar_df = pd.read_csv(f'{ORI_CSV_PATH}/calendar.csv')
-#
-# try:
-#     os.makedirs(BASE_PATH)
-# except OSError:
-#     print ("Creation of the directory %s failed" % BASE_PATH)
-# else:
-#     print ("Successfully created the directory %s" % BASE_PATH)
-#
-# if not os.path.exists(TEMP_FEATURE_PKL):
-#     grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, nan_mask_d=1913-28)
-#     grid_df.to_pickle(TEMP_FEATURE_PKL)
-# else:
-#     grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
-#
-# history_df = train_evaluate_model(grid_df, M5_FEATURES, TARGET, BASE_PATH)
-# history_df.to_pickle(f'{BASE_PATH}/history.pkl')
-#
-# base_test = get_base_test(BASE_PATH)
-#
-# final_all_preds = predict_test(base_test, M5_FEATURES, TARGET, BASE_PATH)
-# final_all_preds.to_csv(f'{BASE_PATH}/submission.csv', index=False)
+    history_df = train_evaluate_model(M5_FEATURES, TARGET, BASE_PATH)
+    history_df.to_pickle(f'{BASE_PATH}/history.pkl')
+
+    final_all_preds = predict_test(M5_FEATURES, TARGET, BASE_PATH)
+    for col in [f'F{i}' for i in range(1, 29)]:
+        print(col, final_all_preds[col].sum())
+    submission = pd.read_csv(f'{ORI_CSV_PATH}/sample_submission.csv')
+    submission = pd.concat([final_all_preds, submission[~submission['id'].isin(final_all_preds.id.unique().tolist())]],
+                           axis=0)
+    submission.to_csv(f'{BASE_PATH}/submission.csv', index=False)
+    return
 
