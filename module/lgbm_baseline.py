@@ -227,6 +227,9 @@ def melt_train_df(train_df, prices_df, calendar_df, target):
     # and safe memory
     grid_df = grid_df[grid_df['wm_yr_wk'] >= grid_df['release']]
     grid_df = grid_df.reset_index(drop=True)
+    grid_df['release'] = grid_df['release'] - grid_df['release'].min()
+    grid_df['release'] = grid_df['release'].astype(np.int16)
+
     return grid_df
 
 def extract_price_features(prices_df, calendar_df, grid_df):
