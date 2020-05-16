@@ -194,6 +194,20 @@ def melt_train_df(train_df, prices_df, calendar_df, target):
                       var_name='d',
                       value_name=target)
 
+    # To be able to make predictions
+    # we need to add "test set" to our grid
+    add_grid = pd.DataFrame()
+    for i in range(1, 29):
+        temp_df = train_df[index_columns]
+        temp_df = temp_df.drop_duplicates()
+        temp_df['d'] = 'd_' + str(END_TRAIN + i)
+        temp_df[TARGET] = np.nan
+        add_grid = pd.concat([add_grid, temp_df])
+
+    grid_df = pd.concat([grid_df, add_grid])
+    grid_df = grid_df.reset_index(drop=True)
+    del add_grid
+
     # Prices are set by week
     # so it we will have not very accurate release week
     release_df = prices_df.groupby(['store_id', 'item_id'])['wm_yr_wk'].agg(['min']).reset_index()
@@ -462,7 +476,7 @@ def get_base_test(base_path):
 def predict_test(grid_df, feature_columns, target, base_path):
 
     pridiction_list = []
-    for fold_ in CV_FOLDS:
+    for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         for PREDICT_DAY in range(1, 29):
             print('Predict | Day:', PREDICT_DAY)
