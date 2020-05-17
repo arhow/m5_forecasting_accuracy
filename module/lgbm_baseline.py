@@ -495,7 +495,7 @@ def predict_test(feature_columns, target, base_path):
                 day_mask = grid_df['d'] == (END_TRAIN + PREDICT_DAY)
                 store_mask = grid_df['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
-                grid_df[target][mask] = estimator.predict(grid_df[mask][feature_columns])
+                base_test[target][mask] = estimator.predict(grid_df[mask][feature_columns])
 
             # Make good column naming and add
             # to all_preds DataFrame
@@ -533,6 +533,9 @@ def main():
             print("Successfully created the directory %s" % BASE_PATH)
 
         grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
+        grid_df['item_id'] = grid_df['item_id'].astype('category')
+        grid_df['dept_id'] = grid_df['dept_id'].astype('category')
+        grid_df['cat_id'] = grid_df['cat_id'].astype('category')
         # grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
         # grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
         # grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
