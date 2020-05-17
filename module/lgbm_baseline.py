@@ -533,12 +533,12 @@ def main():
             print("Successfully created the directory %s" % BASE_PATH)
 
         grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
-        grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-        grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-        grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
-        for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
-            grid_df[col] = grid_df[col].replace(
-                dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
+        # grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        # grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        # grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+        # for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+        #     grid_df[col] = grid_df[col].replace(
+        #         dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
         grid_df = reduce_mem_usage(grid_df)
         grid_df.to_pickle(TEMP_FEATURE_PKL)
 
