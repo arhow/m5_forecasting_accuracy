@@ -480,8 +480,11 @@ def predict_test(feature_columns, target, base_path):
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path)
+        main_time = time.time()
+        
         for PREDICT_DAY in range(1, 29):
             print(f'FOLD{fold_} Predict | Day:{PREDICT_DAY}')
+            start_time = time.time()
 
             # Make temporary grid to calculate rolling lags
             grid_df = base_test.copy()
@@ -492,20 +495,24 @@ def predict_test(feature_columns, target, base_path):
                 model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
-                day_mask = grid_df['d'] == (END_TRAIN + PREDICT_DAY)
-                store_mask = grid_df['store_id'] == store_id
+                day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
+                store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
                 base_test[target][mask] = estimator.predict(grid_df[mask][feature_columns])
 
             # Make good column naming and add
             # to all_preds DataFrame
-            temp_df = grid_df[day_mask][['id', target]]
+            temp_df = base_test[day_mask][['id', target]]
             temp_df.columns = ['id', 'F' + str(PREDICT_DAY)]
+
             if 'id' in list(all_preds):
                 all_preds = all_preds.merge(temp_df, on=['id'], how='left')
             else:
                 all_preds = temp_df.copy()
             all_preds = all_preds.reset_index(drop=True)
+            print('#' * 10, ' %0.2f min round |' % ((time.time() - start_time) / 60),
+                  ' %0.2f min total |' % ((time.time() - main_time) / 60),
+                  ' %0.2f day sales |' % (temp_df['F' + str(PREDICT_DAY)].sum()))
         pridiction_list.append(all_preds)
 
     final_all_preds = pd.DataFrame()
