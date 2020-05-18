@@ -373,10 +373,11 @@ def extract_encode_features(grid_df, target, nan_mask_d):
     base_ = grid_df[['store_id', 'cat_id', 'dept_id', 'item_id', 'tm_dw', TARGET]].copy()
     base_.loc[grid_df['d'] > nan_mask_d, TARGET] = np.nan
     icols = [
-        ['cat_id'],
-        ['dept_id'],
+        ['store_id', 'cat_id'],
+        ['store_id', 'dept_id'],
         ['store_id'],
-        ['item_id'],
+        ['store_id', 'item_id'],
+        ['store_id', 'tm_w_end']
     ]
     for col in icols:
         col_name = '_' + '_'.join(col) + '_'
@@ -481,7 +482,7 @@ def predict_test(feature_columns, target, base_path):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path)
         main_time = time.time()
-        
+
         for PREDICT_DAY in range(1, 29):
             print(f'FOLD{fold_} Predict | Day:{PREDICT_DAY}')
             start_time = time.time()
@@ -498,7 +499,7 @@ def predict_test(feature_columns, target, base_path):
                 day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
                 store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
-                base_test[target][mask] = estimator.predict(grid_df[mask][feature_columns])
+                base_test.loc[mask, target] = estimator.predict(grid_df[mask][feature_columns])
 
             # Make good column naming and add
             # to all_preds DataFrame
@@ -540,15 +541,15 @@ def main():
             print("Successfully created the directory %s" % BASE_PATH)
 
         grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
-        grid_df['item_id'] = grid_df['item_id'].astype('category')
-        grid_df['dept_id'] = grid_df['dept_id'].astype('category')
-        grid_df['cat_id'] = grid_df['cat_id'].astype('category')
-        # grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-        # grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
-        # grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
-        # for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
-        #     grid_df[col] = grid_df[col].replace(
-        #         dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
+        # grid_df['item_id'] = grid_df['item_id'].astype('category')
+        # grid_df['dept_id'] = grid_df['dept_id'].astype('category')
+        # grid_df['cat_id'] = grid_df['cat_id'].astype('category')
+        grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+        for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+            grid_df[col] = grid_df[col].replace(
+                dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
         grid_df = reduce_mem_usage(grid_df)
         grid_df.to_pickle(TEMP_FEATURE_PKL)
 
