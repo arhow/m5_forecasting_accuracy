@@ -370,8 +370,8 @@ def extract_sliding_shift_features(grid_df, target):
 
 
 def extract_encode_features(grid_df, target, nan_mask_d):
-    base_ = grid_df[['store_id', 'cat_id', 'dept_id', 'item_id', 'tm_dw', TARGET]].copy()
-    base_.loc[grid_df['d'] > nan_mask_d, TARGET] = np.nan
+    base_ = grid_df[['store_id', 'cat_id', 'dept_id', 'item_id', 'tm_dw', 'tm_w_end', target]].copy()
+    base_.loc[grid_df['d'] > nan_mask_d, target] = np.nan
     icols = [
         ['store_id', 'cat_id'],
         ['store_id', 'dept_id'],
