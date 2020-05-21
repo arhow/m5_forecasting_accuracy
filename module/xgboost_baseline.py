@@ -7,11 +7,12 @@ import time
 import os, sys, gc, time, warnings, pickle, psutil, random
 from multiprocessing import Pool        # Multiprocess Runs
 import lightgbm as lgb
+import xgboost as xgb
 from sklearn.model_selection import GroupKFold
 
 ########################### globle var section
 #################################################################################
-VER =10
+VER =11
 SEED = 42                        # We want all things
 ORI_CSV_PATH = '../input/m5-forecasting-accuracy'
 STORES_IDS = ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']
@@ -22,7 +23,7 @@ P_HORIZON   = 28                 # Prediction horizon
 USE_AUX     = False               # Use or not pretrained models
 BASE_PATH  = f'../cache/ver{VER}'
 TEMP_FEATURE_PKL =  f'{BASE_PATH}/grid_features.pkl'
-lgb_params = {
+xgb_params = {
                     'boosting_type': 'gbdt',
                     'objective': 'tweedie',
                     'tweedie_variance_power': 1.1,
