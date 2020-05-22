@@ -24,21 +24,22 @@ USE_AUX     = False               # Use or not pretrained models
 BASE_PATH  = f'../cache/ver{VER}'
 TEMP_FEATURE_PKL =  f'{BASE_PATH}/grid_features.pkl'
 xgb_params = {
-                    'boosting_type': 'gbdt',
-                    'objective': 'tweedie',
+                    'booster': 'gbtree',
+                    'objective': 'reg:tweedie',
                     'tweedie_variance_power': 1.1,
-                    'metric': 'rmse',
+                    'eval_metric': 'rmse',
                     'subsample': 0.5,
-                    'subsample_freq': 1,
-                    'learning_rate': 0.03,
-                    'num_leaves': 2**11-1,
-                    'min_data_in_leaf': 2**12-1,
-                    'feature_fraction': 0.5,
+#                     'subsample_freq': 1,
+                    'eta': 0.03,
+                    'max_depth': 6,
+#                     'min_data_in_leaf': 2**12-1,
+#                     'feature_fraction': 0.5,
                     'max_bin': 100,
-                    'n_estimators': 1400,
-                    'boost_from_average': False,
-                    'verbose': 1,
+#                     'n_estimators': 1400,
+#                     'boost_from_average': False,
+                    'verbosity': 1,
                     'seed':SEED,
+#                     'tree_method':'gpu_hist',
                 }
 M5_FEATURES = ['item_id',
  'dept_id',
@@ -158,6 +159,44 @@ def reduce_mem_usage(df, verbose=True):
     end_mem = df.memory_usage().sum() / 1024**2
     if verbose: print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
     return df
+
+def root_mean_sqared_error(y, y_pred):
+    return np.sqrt(np.mean(np.square(y - y_pred)))
+
+def permutation_importance(model, validation_df, features_columns, target, metric=root_mean_sqared_error, verbose=0):
+
+    list_ = []
+    # Make normal prediction with our model and save score
+    dMatrix = xgb.DMatrix(validation_df[features_columns].values)
+    validation_df['preds'] = model.predict(dMatrix)
+    base_score = metric(validation_df[target], validation_df['preds'])
+    if verbose > 0:
+        print('Standart RMSE', base_score)
+
+    # Now we are looping over all our numerical features
+    for col in features_columns:
+
+        # We will make validation set copy to restore
+        # features states on each run
+        temp_df = validation_df.copy()
+
+        # Error here appears if we have "categorical" features and can't
+        # do np.random.permutation without disrupt categories
+        # so we need to check if feature is numerical
+        if temp_df[col].dtypes.name != 'category':
+            temp_df[col] = np.random.permutation(temp_df[col].values)
+            dMatrix = xgb.DMatrix(temp_df[features_columns].values)
+            temp_df['preds'] = model.predict(dMatrix)
+            cur_score = metric(temp_df[target], temp_df['preds'])
+
+            list_.append({'feature': col, 'permutation_importance': np.round(cur_score - base_score, 4)})
+            # If our current rmse score is less than base score
+            # it means that feature most probably is a bad one
+            # and our model is learning on noise
+            if verbose > 0:
+                print(col, np.round(cur_score - base_score, 4))
+
+    return pd.DataFrame(list_).sort_values(by=['permutation_importance'], ascending=False)
 
 ########################### feature extract
 #################################################################################
@@ -403,20 +442,20 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     return lag_df[[col_name]]
 
 
-def train_evaluate_model(feature_columns, target, base_path):
+def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_IDS):
 
     his = []
-    for store_id in STORES_IDS:
+    for store_id in stores_ids:
         print('Train', store_id)
 
-        grid_df = get_data_by_store(store_id)
+        grid_df = get_data_by_store(store_id, stores_ids)
 
         train_mask = grid_df['d'] <= END_TRAIN
         preds_mask = grid_df['d'] > (END_TRAIN - 100)
 
         ## Initiating our GroupKFold
         folds = GroupKFold(n_splits=3)
-        grid_df['groups'] = grid_df['tm_w'].astype(str) + '_' + grid_df['tm_y'].astype(str)
+        grid_df['groups'] = grid_df['tm_y'].astype(str)
         split_groups = grid_df[train_mask]['groups']
 
         # Main Data
@@ -440,10 +479,10 @@ def train_evaluate_model(feature_columns, target, base_path):
             print('Fold:', fold_)
             trn_X, trn_y = X.iloc[trn_idx, :], y[trn_idx]
             val_X, val_y = X.iloc[val_idx, :], y[val_idx]
-            train_data = lgb.Dataset(trn_X, label=trn_y)
-            valid_data = lgb.Dataset(val_X, label=val_y)
-            estimator = lgb.train(lgb_params, train_data, valid_sets=[train_data, valid_data], verbose_eval=100)
-            prediction_val = estimator.predict(val_X)
+            train_data = xgb.DMatrix(trn_X.values, label=trn_y.values)
+            valid_data = xgb.DMatrix(val_X.values, label=val_y.values)
+            estimator = xgb.train(xgb_params, train_data, num_boost_round=500, evals=[(train_data,'train'), (valid_data,'eval')], verbose_eval=100)
+            prediction_val = estimator.predict(valid_data)
             rmse_val = rmse(val_y, prediction_val)
 
             # Save model - it's not real '.bin' but a pickle file
@@ -465,21 +504,21 @@ def train_evaluate_model(feature_columns, target, base_path):
 
     return pd.DataFrame(his)
 
-def get_base_test(base_path):
+def get_base_test(base_path, stores_ids=STORES_IDS):
     base_test = pd.DataFrame()
-    for store_id in STORES_IDS:
+    for store_id in stores_ids:
         temp_df = pd.read_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
         temp_df['store_id'] = store_id
         base_test = pd.concat([base_test, temp_df]).reset_index(drop=True)
 
     return base_test
 
-def predict_test(feature_columns, target, base_path):
+def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
 
     pridiction_list = []
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
-        base_test = get_base_test(base_path)
+        base_test = get_base_test(base_path, stores_ids)
         main_time = time.time()
 
         for PREDICT_DAY in range(1, 29):
@@ -490,7 +529,7 @@ def predict_test(feature_columns, target, base_path):
             grid_df = base_test.copy()
             grid_df = extract_sliding_shift_features(grid_df, target)
 
-            for store_id in STORES_IDS:
+            for store_id in stores_ids:
 
                 model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
@@ -498,7 +537,8 @@ def predict_test(feature_columns, target, base_path):
                 day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
                 store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
-                base_test.loc[mask, target] = estimator.predict(grid_df[mask][feature_columns])
+                dMatrix = xgb.DMatrix(grid_df[mask][feature_columns].values)
+                base_test.loc[mask, target] = estimator.predict(dMatrix)
 
             # Make good column naming and add
             # to all_preds DataFrame
@@ -522,6 +562,39 @@ def predict_test(feature_columns, target, base_path):
             final_all_preds[item] = (pridiction_list[0][item] * (1 / 3)) + (pridiction_list[1][item] * (1 / 3)) + (pridiction_list[2][item] * (1 / 3))
 
     return final_all_preds
+
+
+def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
+    his = []
+    for store_id in stores_ids:
+        print('permutation', store_id)
+
+        grid_df = get_data_by_store(store_id)
+
+        train_mask = grid_df['d'] <= END_TRAIN
+
+        ## Initiating our GroupKFold
+        folds = GroupKFold(n_splits=3)
+        grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
+        split_groups = grid_df[train_mask]['groups']
+        X, y = grid_df[train_mask][features_columns].reset_index(drop=True), grid_df[train_mask][target].reset_index(
+            drop=True)
+        del grid_df
+
+        for fold_, (trn_idx, val_idx) in enumerate(folds.split(X, y, groups=split_groups)):
+            val_X, val_y = X.iloc[val_idx, :], y[val_idx]
+            print('Fold:', fold_)
+            model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+            estimator = pickle.load(open(model_name, 'rb'))
+            permutation_importance_df = permutation_importance(estimator, pd.concat([val_X, val_y], axis=1),
+                                                               features_columns, target, metric=root_mean_sqared_error,
+                                                               verbose=0)
+            del estimator, val_X, val_y
+            gc.collect()
+
+            his.append({'permutation_importance_df': permutation_importance_df, 'fold_': fold_, 'store_id': store_id})
+
+    return pd.DataFrame(his)
 
 
 ########################### RUN
