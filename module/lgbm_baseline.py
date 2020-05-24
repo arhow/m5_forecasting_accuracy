@@ -485,6 +485,8 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
 
             prediction_val = estimator.predict(val_X)
             rmse_val = rmse(val_y, prediction_val)
+            prediction_trn = estimator.predict(trn_X)
+            rmse_trn = rmse(trn_y, prediction_trn)
 
             # Save model - it's not real '.bin' but a pickle file
             # estimator = lgb.Booster(model_file='model.txt')
@@ -501,7 +503,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             del train_data, valid_data, estimator, trn_X, val_X, trn_y, val_y
             gc.collect()
 
-            his.append({'rmse_val': rmse_val, 'fold_': fold_, 'store_id': store_id, 'prediction_val':prediction_val, 'permutation_importance':importance_df})
+            his.append({'rmse_val': rmse_val, 'rmse_trn':rmse_trn, 'rmse_diff':rmse_val-rmse_trn, 'fold_': fold_, 'store_id': store_id, 'prediction_val':prediction_val, 'permutation_importance':importance_df})
 
     return pd.DataFrame(his)
 
@@ -564,12 +566,14 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key=
         if item != 'id':
             final_all_preds[item] = (pridiction_list[0][item] * (1 / 3)) + (pridiction_list[1][item] * (1 / 3)) + (pridiction_list[2][item] * (1 / 3))
 
-    melt_preds_df = pd.melt(final_all_preds,
-                      id_vars=['id'],
-                      var_name='d',
-                      value_name=target)
+    if key == 'valid':
+        melt_preds_df = pd.melt(final_all_preds, id_vars=['id'], var_name='d', value_name=target)
+        melt_preds_df.replace({'d': dict(zip([f'F{i}' for i in range(1, 29)], [END_TRAIN - 28 + i for i in range(1, 29)]))}, inplace=True)
+        melt_preds_df = pd.merge(melt_preds_df, get_base_test(BASE_PATH, stores_ids, key=key)[['id', 'd', 'sales']], on=['id', 'd'], how='left')
+        rmse_val = rmse(melt_preds_df['sales_y'].values, melt_preds_df['sales_x'].values)
+        print('rmse_val', rmse_val)
 
-    return final_all_preds, melt_preds_df
+    return final_all_preds
 
 
 def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
