@@ -207,7 +207,7 @@ def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_ma
     grid_df = extract_calendar_features(calendar_df, grid_df)
     stop_watch.append(time.time())
     print(f'extract_calendar_features {stop_watch[-1]-stop_watch[-2]}')
-    grid_df = extract_rolling_features(grid_df, target)
+    grid_df =  (grid_df, target)
     stop_watch.append(time.time())
     print(f'extract_rolling_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_encode_features(grid_df, target, nan_mask_d)
@@ -480,6 +480,8 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
 
             if permutation:
                 importance_df = permutation_importance(estimator, pd.concat([val_X,val_y], axis=1), feature_columns, target, metric=root_mean_sqared_error,verbose=0)
+            else:
+                importance_df = None
 
             prediction_val = estimator.predict(val_X)
             rmse_val = rmse(val_y, prediction_val)
@@ -503,21 +505,21 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
 
     return pd.DataFrame(his)
 
-def get_base_test(base_path, stores_ids=STORES_IDS):
+def get_base_test(base_path, stores_ids=STORES_IDS, key='test'):
     base_test = pd.DataFrame()
     for store_id in stores_ids:
-        temp_df = pd.read_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
+        temp_df = pd.read_pickle(f'{base_path}/{key}_{store_id}_ver{VER}.pkl')
         temp_df['store_id'] = store_id
         base_test = pd.concat([base_test, temp_df]).reset_index(drop=True)
 
     return base_test
 
-def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
+def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key='test'):
 
     pridiction_list = []
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
-        base_test = get_base_test(base_path, stores_ids)
+        base_test = get_base_test(base_path, stores_ids, key=key)
         main_time = time.time()
 
         for PREDICT_DAY in range(1, 29):
@@ -559,7 +561,12 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
         if item != 'id':
             final_all_preds[item] = (pridiction_list[0][item] * (1 / 3)) + (pridiction_list[1][item] * (1 / 3)) + (pridiction_list[2][item] * (1 / 3))
 
-    return final_all_preds
+    melt_preds_df = pd.melt(final_all_preds,
+                      id_vars=['id'],
+                      var_name='d',
+                      value_name=target)
+
+    return final_all_preds, melt_preds_df
 
 
 def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
@@ -573,7 +580,7 @@ def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
 
         ## Initiating our GroupKFold
         folds = GroupKFold(n_splits=3)
-        grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
+        # grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
         split_groups = grid_df[train_mask]['groups']
         X, y = grid_df[train_mask][features_columns].reset_index(drop=True), grid_df[train_mask][target].reset_index(
             drop=True)
