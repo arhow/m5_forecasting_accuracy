@@ -514,9 +514,12 @@ def get_base_test(base_path, stores_ids=STORES_IDS, key='test'):
 
     return base_test
 
-def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key='test'):
+def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key='test', end_train=END_TRAIN):
 
     pridiction_list = []
+    if key == 'valid':
+        end_train -= 28
+
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path, stores_ids, key=key)
@@ -535,7 +538,7 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key=
                 model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
-                day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
+                day_mask = base_test['d'] == (end_train + PREDICT_DAY)
                 store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
                 base_test.loc[mask, target] = estimator.predict(grid_df[mask][feature_columns])
