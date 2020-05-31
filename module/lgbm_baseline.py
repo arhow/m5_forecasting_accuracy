@@ -8,6 +8,8 @@ import os, sys, gc, time, warnings, pickle, psutil, random
 from multiprocessing import Pool        # Multiprocess Runs
 import lightgbm as lgb
 from sklearn.model_selection import GroupKFold
+from pandarallel import pandarallel
+pandarallel.initialize()
 
 ########################### globle var section
 #################################################################################
@@ -207,7 +209,7 @@ def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_ma
     grid_df = extract_calendar_features(calendar_df, grid_df)
     stop_watch.append(time.time())
     print(f'extract_calendar_features {stop_watch[-1]-stop_watch[-2]}')
-    grid_df =  (grid_df, target)
+    grid_df = extract_rolling_features(grid_df, target)
     stop_watch.append(time.time())
     print(f'extract_rolling_features {stop_watch[-1]-stop_watch[-2]}')
     grid_df = extract_encode_features(grid_df, target, nan_mask_d)
@@ -434,7 +436,13 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     # target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2]
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
-    lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day).rolling(roll_wind).mean())
+    lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
+    lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day))
+
+    # grid_df[f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'] = grid_df.groupby(["id"])["sales_diff"].rolling(
+    #     i).parallel_apply(fft_peak).reset_index(0, drop=True)
+    # grid_df[f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'] = grid_df.groupby(["id"])[
+    #     f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'].transform(lambda x: x.shift(shift_day))
     return lag_df[[col_name]]
 
 
