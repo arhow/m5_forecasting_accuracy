@@ -437,7 +437,7 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
     lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
-    lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day))
+    lag_df[col_name] = lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day))
 
     # grid_df[f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'] = grid_df.groupby(["id"])["sales_diff"].rolling(
     #     i).parallel_apply(fft_peak).reset_index(0, drop=True)
