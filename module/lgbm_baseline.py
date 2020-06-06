@@ -468,8 +468,9 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         grid_df[preds_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
         grid_df[valid_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/valid_{store_id}_ver{VER}.pkl')
 
+        feature_columns_i = feature_columns[store_id]
         # Main Data
-        X, y = grid_df[train_mask][feature_columns], grid_df[train_mask][target]
+        X, y = grid_df[train_mask][feature_columns_i], grid_df[train_mask][target]
         del grid_df
 
 
@@ -487,7 +488,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             estimator = lgb.train(lgb_params, train_data, valid_sets=[train_data, valid_data], verbose_eval=100)
 
             if permutation:
-                importance_df = permutation_importance(estimator, pd.concat([val_X,val_y], axis=1), feature_columns, target, metric=root_mean_sqared_error,verbose=0)
+                importance_df = permutation_importance(estimator, pd.concat([val_X,val_y], axis=1), feature_columns_i, target, metric=root_mean_sqared_error,verbose=0)
             else:
                 importance_df = None
 
