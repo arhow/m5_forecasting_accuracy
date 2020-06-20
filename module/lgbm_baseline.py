@@ -15,7 +15,7 @@ pandarallel.initialize()
 #################################################################################
 VER =10
 SEED = 42                        # We want all things
-ORI_CSV_PATH = '../input/m5-forecasting-accuracy'
+ORI_CSV_PATH = '../input/m5-forecasting-accuracy2'
 STORES_IDS = ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']
 TARGET = 'sales'
 START_TRAIN = 0                  # We can skip some rows (Nans/faster training)
@@ -198,7 +198,7 @@ def permutation_importance(model, validation_df, features_columns, target, metri
 
 ########################### feature extract
 #################################################################################
-def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_mask_d=1913-28):
+def extract_features(train_df, prices_df, calendar_df, target, base_path, nan_mask_d=1913):
     stop_watch = [time.time()]
     grid_df = melt_train_df(train_df, prices_df, calendar_df, target)
     stop_watch.append(time.time())
@@ -453,8 +453,8 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         print('Train', store_id)
 
         grid_df = get_data_by_store(store_id)
-        train_mask = grid_df['d'] <= END_TRAIN-28
-        valid_mask = (grid_df['d'] > END_TRAIN-28 -100) & (grid_df['d'] <= END_TRAIN)
+        train_mask = grid_df['d'] <= END_TRAIN
+        # valid_mask = (grid_df['d'] > END_TRAIN-28 -100) & (grid_df['d'] <= END_TRAIN)
         preds_mask = grid_df['d'] > (END_TRAIN - 100)
 
         ## Initiating our GroupKFold
@@ -466,7 +466,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         # Removing features that we need to calculate recursively
         keep_cols = [col for col in list(grid_df) if '_tmp_' not in col]
         grid_df[preds_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
-        grid_df[valid_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/valid_{store_id}_ver{VER}.pkl')
+        # grid_df[valid_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/valid_{store_id}_ver{VER}.pkl')
 
         feature_columns_i = feature_columns[store_id]
         # Main Data
@@ -545,14 +545,14 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key=
             grid_df = extract_sliding_shift_features(grid_df, target)
 
             for store_id in stores_ids:
-
+                feature_columns_i = feature_columns[store_id]
                 model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
                 day_mask = base_test['d'] == (end_train + PREDICT_DAY)
                 store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
-                base_test.loc[mask, target] = estimator.predict(grid_df[mask][feature_columns])
+                base_test.loc[mask, target] = estimator.predict(grid_df[mask][feature_columns_i])
 
             # Make good column naming and add
             # to all_preds DataFrame
@@ -633,7 +633,7 @@ def main():
         else:
             print("Successfully created the directory %s" % BASE_PATH)
 
-        grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913 - 28)
+        grid_df = extract_features(train_df, prices_df, calendar_df, target=TARGET, base_path=None, nan_mask_d=1913)
         grid_df['item_id'] = grid_df['item_id'].astype('category')
         grid_df['dept_id'] = grid_df['dept_id'].astype('category')
         grid_df['cat_id'] = grid_df['cat_id'].astype('category')

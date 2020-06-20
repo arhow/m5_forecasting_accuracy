@@ -91,26 +91,73 @@ def seed_everything(seed=0):
     random.seed(seed)
     np.random.seed(seed)
 
+def root_mean_sqared_error(y, y_pred):
+    return np.sqrt(np.mean(np.square(y - y_pred)))
+
+
+def permutation_importance(model, validation_df, features_columns, target, metric=root_mean_sqared_error, verbose=0):
+
+    list_ = []
+    # Make normal prediction with our model and save score
+    validation_df['preds'] = model.predict(validation_df[features_columns])
+    base_score = metric(validation_df[target], validation_df['preds'])
+    if verbose > 0:
+        print('Standart RMSE', base_score)
+
+    # Now we are looping over all our numerical features
+    for col in features_columns:
+
+        # We will make validation set copy to restore
+        # features states on each run
+        temp_df = validation_df.copy()
+
+        # Error here appears if we have "categorical" features and can't
+        # do np.random.permutation without disrupt categories
+        # so we need to check if feature is numerical
+        if temp_df[col].dtypes.name != 'category':
+            temp_df[col] = np.random.permutation(temp_df[col].values)
+            temp_df['preds'] = model.predict(temp_df[features_columns])
+            cur_score = metric(temp_df[target], temp_df['preds'])
+
+            list_.append({'feature': col, 'permutation_importance': np.round(cur_score - base_score, 4)})
+            # If our current rmse score is less than base score
+            # it means that feature most probably is a bad one
+            # and our model is learning on noise
+            if verbose > 0:
+                print(col, np.round(cur_score - base_score, 4))
+
+    return pd.DataFrame(list_).sort_values(by=['permutation_importance'], ascending=False)
+
 ########################### Train Models
 #################################################################################
-def train_model(grid_df, features_columns, categorical_features, target, shift, base_path):
-
+def train_model(grid_df, features_columns, categorical_features, target, shift, save_base_path):
     for store_id in STORES_IDS:
         print('Train', store_id)
         train_mask = (grid_df['d'] > START_TRAIN) & (grid_df['d'] <= (END_TRAIN - P_HORIZON))
         valid_mask = (grid_df['d'] > (END_TRAIN - P_HORIZON - 200)) & (grid_df['d'] <= (END_TRAIN))
-        train_data = lgb.Dataset(grid_df[train_mask][features_columns], label=grid_df[train_mask][target])
-        valid_data = lgb.Dataset(grid_df[valid_mask][features_columns], label=grid_df[valid_mask][target])
+        train_data = lgb.Dataset(grid_df[train_mask][features_columns + categorical_features], label=grid_df[train_mask][target])
+        valid_data = lgb.Dataset(grid_df[valid_mask][features_columns + categorical_features], label=grid_df[valid_mask][target])
         seed_everything(SEED)
         estimator = lgb.train(LGB_PARAMS, train_data, valid_sets=[valid_data], verbose_eval=100, categorical_feature=categorical_features)
-        model_name = f'{base_path}/lgb_model_{store_id}_shift{shift}_v{VER}.bin'
+        model_name = f'{save_base_path}/lgb_model_{store_id}_shift{shift}_v{VER}.bin'
         pickle.dump(estimator, open(model_name, 'wb'))
     return
 
 
-def evaluation(base_path, typ, model_features, target, shift_day, verbose=1):
+def predict_samples(grid_df, base_path, store_id, shift_day, features_columns, categorical_features, target, verbose=1):
     ########################### Validation
     #################################################################################
+    model_path = f'{base_path}/lgb_model_{store_id}_shift{shift_day}_v{VER}.bin'
+    estimator = pickle.load(open(model_path, 'rb'))
+    y_pred = estimator.predict(grid_df[features_columns])
+    if type(target) == type(None):
+        rmse_score = root_mean_sqared_error(grid_df['target'].values, y_pred)
+    else:
+        rmse_score = None
+    return y_pred, rmse_score
+
+
+    # load model and data
 
     # Create Dummy DataFrame to store predictions
     all_preds = pd.DataFrame()
