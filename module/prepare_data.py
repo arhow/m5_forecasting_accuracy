@@ -19,28 +19,12 @@ ORI_CSV_PATH = '../input/m5-forecasting-accuracy2'
 STORES_IDS = ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']
 TARGET = 'sales'
 START_TRAIN = 0                  # We can skip some rows (Nans/faster training)
-END_TRAIN   = 1913               # End day of our train set
-P_HORIZON   = 28                 # Prediction horizon
-USE_AUX     = False               # Use or not pretrained models
+END_TRAIN   = 1913+28               # End day of our train set
+# P_HORIZON   = 28                 # Prediction horizon
+# USE_AUX     = False               # Use or not pretrained models
 BASE_PATH  = f'../cache/ver{VER}'
 TEMP_FEATURE_PKL =  f'{BASE_PATH}/grid_features.pkl'
-lgb_params = {
-                    'boosting_type': 'gbdt',
-                    'objective': 'tweedie',
-                    'tweedie_variance_power': 1.1,
-                    'metric': 'rmse',
-                    'subsample': 0.5,
-                    'subsample_freq': 1,
-                    'learning_rate': 0.03,
-                    'num_leaves': 2**11-1,
-                    'min_data_in_leaf': 2**12-1,
-                    'feature_fraction': 0.5,
-                    'max_bin': 100,
-                    'n_estimators': 1400,
-                    'boost_from_average': False,
-                    'verbose': 1,
-                    'seed':SEED,
-                }
+
 M5_FEATURES = ['item_id',
  'dept_id',
  'cat_id',
@@ -234,17 +218,17 @@ def melt_train_df(train_df, prices_df, calendar_df, target):
 
     # To be able to make predictions
     # we need to add "test set" to our grid
-    add_grid = pd.DataFrame()
-    for i in range(1, 29):
-        temp_df = train_df[index_columns]
-        temp_df = temp_df.drop_duplicates()
-        temp_df['d'] = 'd_' + str(END_TRAIN + i)
-        temp_df[TARGET] = np.nan
-        add_grid = pd.concat([add_grid, temp_df])
-
-    grid_df = pd.concat([grid_df, add_grid])
-    grid_df = grid_df.reset_index(drop=True)
-    del add_grid
+    # add_grid = pd.DataFrame()
+    # for i in range(1, 29):
+    #     temp_df = train_df[index_columns]
+    #     temp_df = temp_df.drop_duplicates()
+    #     temp_df['d'] = 'd_' + str(END_TRAIN + i)
+    #     temp_df[TARGET] = np.nan
+    #     add_grid = pd.concat([add_grid, temp_df])
+    #
+    # grid_df = pd.concat([grid_df, add_grid])
+    # grid_df = grid_df.reset_index(drop=True)
+    # del add_grid
 
     # Prices are set by week
     # so it we will have not very accurate release week

@@ -9,24 +9,24 @@ from multiprocessing import Pool        # Multiprocess Runs
 import lightgbm as lgb
 from sklearn.model_selection import GroupKFold
 from module.prepare_data import *
+from catboost import CatBoostRegressor
 
-lgb_params = {
-                    'boosting_type': 'gbdt',
-                    'objective': 'tweedie',
-                    'tweedie_variance_power': 1.1,
-                    'metric': 'rmse',
-                    'subsample': 0.5,
-                    'subsample_freq': 1,
-                    'learning_rate': 0.03,
-                    'num_leaves': 2**11-1,
-                    'min_data_in_leaf': 2**12-1,
-                    'feature_fraction': 0.5,
-                    'max_bin': 100,
-                    'n_estimators': 1400,
-                    'boost_from_average': False,
-                    'verbose': 1,
-                    'seed':SEED,
-                }
+cat_params = {
+    'n_estimators':1400,
+    'loss_function':'Tweedie',
+    # 'tweedie_variance_power': 1.1,
+    'eval_metric':'RMSE',
+    'subsample': 0.5,
+    'sampling_frequency':1,
+    'learning_rate':0.03,
+    'max_leaves': 2 ** 11 - 1,
+    'min_data_in_leaf': 2 ** 12 - 1,
+    'feature_fraction': 0.5,
+    'max_bin': 100,
+    'verbose': 1,
+    'random_seed': SEED,
+}
+
 
 def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_IDS, permutation=False):
 
@@ -65,9 +65,10 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             print('Fold:', fold_)
             trn_X, trn_y = X.iloc[trn_idx, :], y[trn_idx]
             val_X, val_y = X.iloc[val_idx, :], y[val_idx]
-            train_data = lgb.Dataset(trn_X, label=trn_y)
-            valid_data = lgb.Dataset(val_X, label=val_y)
-            estimator = lgb.train(lgb_params, train_data, valid_sets=[train_data, valid_data], verbose_eval=100)
+            # train_data = lgb.Dataset(trn_X, label=trn_y)
+            # valid_data = lgb.Dataset(val_X, label=val_y)
+            estimator = CatBoostRegressor(**cat_params)
+            estimator = estimator.fit(trn_X, trn_y, eval_set=(trn_y, val_y), silent=True)
 
             if permutation:
                 importance_df = permutation_importance(estimator, pd.concat([val_X,val_y], axis=1), feature_columns_i, target, metric=root_mean_sqared_error,verbose=0)
@@ -91,7 +92,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
 
             # Remove temporary files and objects
             # to free some hdd space and ram memory
-            del train_data, valid_data, estimator, trn_X, val_X, trn_y, val_y
+            del estimator, trn_X, val_X, trn_y, val_y
             gc.collect()
 
             his.append({'rmse_val': rmse_val, 'rmse_trn':rmse_trn, 'rmse_diff':rmse_val-rmse_trn, 'fold_': fold_, 'store_id': store_id, 'prediction_val':prediction_val, 'permutation_importance':importance_df})
@@ -156,37 +157,3 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key=
         print('rmse_val', rmse_val)
 
     return final_all_preds
-
-
-def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
-    his = []
-    for store_id in stores_ids:
-        print('permutation', store_id)
-
-        grid_df = get_data_by_store(store_id)
-
-        train_mask = grid_df['d'] <= END_TRAIN
-
-        ## Initiating our GroupKFold
-        folds = GroupKFold(n_splits=3)
-        # grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
-        split_groups = grid_df[train_mask]['groups']
-        X, y = grid_df[train_mask][features_columns].reset_index(drop=True), grid_df[train_mask][target].reset_index(
-            drop=True)
-        del grid_df
-
-        for fold_, (trn_idx, val_idx) in enumerate(folds.split(X, y, groups=split_groups)):
-            val_X, val_y = X.iloc[val_idx, :], y[val_idx]
-            print('Fold:', fold_)
-            model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
-            estimator = pickle.load(open(model_name, 'rb'))
-            permutation_importance_df = permutation_importance(estimator, pd.concat([val_X, val_y], axis=1),
-                                                               features_columns, target, metric=root_mean_sqared_error,
-                                                               verbose=0)
-            del estimator, val_X, val_y
-            gc.collect()
-
-            his.append({'permutation_importance_df': permutation_importance_df, 'fold_': fold_, 'store_id': store_id})
-
-    return pd.DataFrame(his)
-
