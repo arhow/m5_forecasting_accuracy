@@ -218,17 +218,19 @@ def melt_train_df(train_df, prices_df, calendar_df, target):
 
     # To be able to make predictions
     # we need to add "test set" to our grid
-    # add_grid = pd.DataFrame()
-    # for i in range(1, 29):
-    #     temp_df = train_df[index_columns]
-    #     temp_df = temp_df.drop_duplicates()
-    #     temp_df['d'] = 'd_' + str(END_TRAIN + i)
-    #     temp_df[TARGET] = np.nan
-    #     add_grid = pd.concat([add_grid, temp_df])
-    #
-    # grid_df = pd.concat([grid_df, add_grid])
-    # grid_df = grid_df.reset_index(drop=True)
-    # del add_grid
+    add_grid = pd.DataFrame()
+    for i in range(1, 29):
+        temp_df = train_df[index_columns]
+        temp_df = temp_df.drop_duplicates()
+        temp_df['d'] = 'd_' + str(END_TRAIN + i)
+        temp_df[TARGET] = np.nan
+        add_grid = pd.concat([add_grid, temp_df])
+
+    grid_df = grid_df[~grid_df['d'].isin(add_grid['d'].unique().tolist())]
+
+    grid_df = pd.concat([grid_df, add_grid])
+    grid_df = grid_df.reset_index(drop=True)
+    del add_grid
 
     # Prices are set by week
     # so it we will have not very accurate release week
@@ -420,7 +422,8 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     # target, shift_day, roll_wind = LAG_DAY[0],LAG_DAY[1],LAG_DAY[2]
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
-    lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
+    # lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
+    lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).apply(np.mean).reset_index(0, drop=True)
     lag_df[col_name] = lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day))
     return lag_df[[col_name]]
 
