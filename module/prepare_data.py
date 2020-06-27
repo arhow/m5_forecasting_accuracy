@@ -13,7 +13,7 @@ pandarallel.initialize()
 
 ########################### globle var section
 #################################################################################
-VER =10
+VER =620
 SEED = 42                        # We want all things
 ORI_CSV_PATH = '../input/m5-forecasting-accuracy2'
 STORES_IDS = ['CA_1', 'CA_2', 'CA_3', 'CA_4', 'TX_1', 'TX_2', 'TX_3', 'WI_1', 'WI_2', 'WI_3']
@@ -421,14 +421,7 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
     lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
-    print(lag_df[col_name].shape, lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day)).shape)
-
     lag_df[col_name] = lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day))
-
-    # grid_df[f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'] = grid_df.groupby(["id"])["sales_diff"].rolling(
-    #     i).parallel_apply(fft_peak).reset_index(0, drop=True)
-    # grid_df[f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'] = grid_df.groupby(["id"])[
-    #     f'rolling{i}_shift(shift_day)_fft_diff_amp_top{top_no}'].transform(lambda x: x.shift(shift_day))
     return lag_df[[col_name]]
 
 def get_base_test(base_path, stores_ids=STORES_IDS, key='test'):
