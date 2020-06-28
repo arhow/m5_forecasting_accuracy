@@ -49,11 +49,9 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         # Saving part of the dataset for later predictions
         # Removing features that we need to calculate recursively
         keep_cols = [col for col in list(grid_df) if '_tmp_' not in col]
-        grid_df = grid_df[preds_mask].reset_index(drop=True)[keep_cols]
-        grid_df.to_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
-
+        if not os.path.exists(f'{base_path}/test_{store_id}_ver{VER}.pkl'):
+            grid_df[preds_mask].reset_index(drop=True)[keep_cols].to_pickle(f'{base_path}/test_{store_id}_ver{VER}.pkl')
         del grid_df
-
 
         # Launch seeder again to make lgb training 100% deterministic
         # with each "code line" np.random "evolves"
@@ -97,6 +95,8 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path, stores_ids)
+        for col in ['event_name_1','event_type_1','event_name_2','event_type_2']:
+            base_test[col] = base_test[col].astype('category')
         main_time = time.time()
 
         for PREDICT_DAY in range(1, 29):
