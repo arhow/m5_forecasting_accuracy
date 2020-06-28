@@ -17,17 +17,12 @@ xgb_params = {
                     'tweedie_variance_power': 1.1,
                     'eval_metric': 'rmse',
                     'subsample': 0.5,
-#                     'subsample_freq': 1,
                     'eta': 0.03,
-                    'max_depth': 6,
-#                     'min_data_in_leaf': 2**12-1,
-#                     'feature_fraction': 0.5,
+                    'max_depth': 9,
                     'max_bin': 100,
-#                     'n_estimators': 1400,
-#                     'boost_from_average': False,
                     'verbosity': 1,
                     'seed':SEED,
-#                     'tree_method':'gpu_hist',
+# 'tree_method':'gpu_hist', 'gpu_id':0, 'task_type':"GPU",
                 }
 
 
@@ -82,7 +77,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             # like estimator.predict(TEST, num_iteration=100)
             # num_iteration - number of iteration want to predict with,
             # NULL or <= 0 means use best iteration
-            model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+            model_name = f'{base_path}/xgboost_model_{store_id}_fold{fold_}_ver{VER}.bin'
             pickle.dump(estimator, open(model_name, 'wb'))
 
             # Remove temporary files and objects
@@ -114,7 +109,7 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
 
             for store_id in stores_ids:
 
-                model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+                model_name = f'{base_path}/xgboost_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
                 day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
@@ -147,35 +142,35 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
     return final_all_preds
 
 
-def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
-    his = []
-    for store_id in stores_ids:
-        print('permutation', store_id)
-
-        grid_df = get_data_by_store(store_id)
-
-        train_mask = grid_df['d'] <= END_TRAIN
-
-        ## Initiating our GroupKFold
-        folds = GroupKFold(n_splits=3)
-        grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
-        split_groups = grid_df[train_mask]['groups']
-        X, y = grid_df[train_mask][features_columns].reset_index(drop=True), grid_df[train_mask][target].reset_index(
-            drop=True)
-        del grid_df
-
-        for fold_, (trn_idx, val_idx) in enumerate(folds.split(X, y, groups=split_groups)):
-            val_X, val_y = X.iloc[val_idx, :], y[val_idx]
-            print('Fold:', fold_)
-            model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
-            estimator = pickle.load(open(model_name, 'rb'))
-            permutation_importance_df = permutation_importance(estimator, pd.concat([val_X, val_y], axis=1),
-                                                               features_columns, target, metric=root_mean_sqared_error,
-                                                               verbose=0)
-            del estimator, val_X, val_y
-            gc.collect()
-
-            his.append({'permutation_importance_df': permutation_importance_df, 'fold_': fold_, 'store_id': store_id})
-
-    return pd.DataFrame(his)
+# def permutation(features_columns, target, base_path, stores_ids=STORES_IDS):
+#     his = []
+#     for store_id in stores_ids:
+#         print('permutation', store_id)
+#
+#         grid_df = get_data_by_store(store_id)
+#
+#         train_mask = grid_df['d'] <= END_TRAIN
+#
+#         ## Initiating our GroupKFold
+#         folds = GroupKFold(n_splits=3)
+#         grid_df['groups'] = grid_df['tm_y'].astype(str) + '_' + grid_df['tm_m'].astype(str)
+#         split_groups = grid_df[train_mask]['groups']
+#         X, y = grid_df[train_mask][features_columns].reset_index(drop=True), grid_df[train_mask][target].reset_index(
+#             drop=True)
+#         del grid_df
+#
+#         for fold_, (trn_idx, val_idx) in enumerate(folds.split(X, y, groups=split_groups)):
+#             val_X, val_y = X.iloc[val_idx, :], y[val_idx]
+#             print('Fold:', fold_)
+#             model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+#             estimator = pickle.load(open(model_name, 'rb'))
+#             permutation_importance_df = permutation_importance(estimator, pd.concat([val_X, val_y], axis=1),
+#                                                                features_columns, target, metric=root_mean_sqared_error,
+#                                                                verbose=0)
+#             del estimator, val_X, val_y
+#             gc.collect()
+#
+#             his.append({'permutation_importance_df': permutation_importance_df, 'fold_': fold_, 'store_id': store_id})
+#
+#     return pd.DataFrame(his)
 
