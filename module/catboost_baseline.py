@@ -10,26 +10,25 @@ import lightgbm as lgb
 from sklearn.model_selection import GroupKFold
 from module.prepare_data import *
 from catboost import CatBoostRegressor
+from catboost import Pool as catPool
 
 cat_params = {
-    'n_estimators':1400,
-    'loss_function':'Tweedie',
-    # 'tweedie_variance_power': 1.1,
-    'eval_metric':'RMSE',
+    'iterations':1400,
+    'loss_function':'Tweedie:variance_power=1.1',
+    'eval_metric':'Tweedie:variance_power=1.1',
     'subsample': 0.5,
-    'sampling_frequency':1,
     'learning_rate':0.03,
-    'max_leaves': 2 ** 11 - 1,
-    'min_data_in_leaf': 2 ** 12 - 1,
-    'feature_fraction': 0.5,
-    'max_bin': 100,
+    'random_strength':0.5,
+    'depth':9,
+#    early_stopping_rounds = 30,
+   'learning_rate':0.18,
+#    'l2_leaf_reg':0.1,
     'verbose': 1,
     'random_seed': SEED,
 }
 
 
 def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_IDS, permutation=False):
-
     his = []
     for store_id in stores_ids:
         print('Train', store_id)
@@ -55,6 +54,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         X, y = grid_df[train_mask][feature_columns_i], grid_df[train_mask][target]
         del grid_df
 
+        categorical_features_indices = np.where(X.dtypes == 'category')[0]
 
         # Launch seeder again to make lgb training 100% deterministic
         # with each "code line" np.random "evolves"
@@ -65,20 +65,22 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             print('Fold:', fold_)
             trn_X, trn_y = X.iloc[trn_idx, :], y[trn_idx]
             val_X, val_y = X.iloc[val_idx, :], y[val_idx]
-            # train_data = lgb.Dataset(trn_X, label=trn_y)
-            # valid_data = lgb.Dataset(val_X, label=val_y)
+
+            train_pool = catPool(trn_X.values, trn_y.values, cat_features=categorical_features_indices)
+            validate_pool = catPool(val_X.values, val_y.values, cat_features=categorical_features_indices)
             estimator = CatBoostRegressor(**cat_params)
-            estimator = estimator.fit(trn_X, trn_y, eval_set=(trn_y, val_y), silent=True)
+            estimator = estimator.fit(train_pool, eval_set=validate_pool, silent=True)
 
             if permutation:
-                importance_df = permutation_importance(estimator, pd.concat([val_X,val_y], axis=1), feature_columns_i, target, metric=root_mean_sqared_error,verbose=0)
+                importance_df = permutation_importance(estimator, pd.concat([val_X, val_y], axis=1), feature_columns_i,
+                                                       target, metric=root_mean_sqared_error, verbose=0)
             else:
                 importance_df = None
 
-            prediction_val = estimator.predict(val_X)
-            rmse_val = rmse(val_y, prediction_val)
-            prediction_trn = estimator.predict(trn_X)
-            rmse_trn = rmse(trn_y, prediction_trn)
+            prediction_val = estimator.predict(val_X.values)
+            rmse_val = rmse(val_y.values, prediction_val)
+            prediction_trn = estimator.predict(trn_X.values)
+            rmse_trn = rmse(trn_y.values, prediction_trn)
 
             # Save model - it's not real '.bin' but a pickle file
             # estimator = lgb.Booster(model_file='model.txt')
@@ -87,7 +89,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             # like estimator.predict(TEST, num_iteration=100)
             # num_iteration - number of iteration want to predict with,
             # NULL or <= 0 means use best iteration
-            model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+            model_name = f'{base_path}/cat_model_{store_id}_fold{fold_}_ver{VER}.bin'
             pickle.dump(estimator, open(model_name, 'wb'))
 
             # Remove temporary files and objects
@@ -95,7 +97,9 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
             del estimator, trn_X, val_X, trn_y, val_y
             gc.collect()
 
-            his.append({'rmse_val': rmse_val, 'rmse_trn':rmse_trn, 'rmse_diff':rmse_val-rmse_trn, 'fold_': fold_, 'store_id': store_id, 'prediction_val':prediction_val, 'permutation_importance':importance_df})
+            his.append({'rmse_val': rmse_val, 'rmse_trn': rmse_trn, 'rmse_diff': rmse_val - rmse_trn, 'fold_': fold_,
+                        'store_id': store_id, 'prediction_val': prediction_val,
+                        'permutation_importance': importance_df})
 
     return pd.DataFrame(his)
 
@@ -120,7 +124,7 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS, key=
 
             for store_id in stores_ids:
                 feature_columns_i = feature_columns[store_id]
-                model_name = f'{base_path}/lgb_model_{store_id}_fold{fold_}_ver{VER}.bin'
+                model_name = f'{base_path}/cat_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
                 day_mask = base_test['d'] == (end_train + PREDICT_DAY)
