@@ -204,8 +204,8 @@ def extract_features(train_df, prices_df, calendar_df, target, nan_mask_d):
     print(f'extract_sliding_shift_features {stop_watch[-1]-stop_watch[-2]}')
     return grid_df
 
-def get_data_by_store(store_id):
-    grid_df = pd.read_pickle(TEMP_FEATURE_PKL)
+def get_data_by_store(store_id, grid_df_path = TEMP_FEATURE_PKL):
+    grid_df = pd.read_pickle(grid_df_path)
     return grid_df[grid_df['store_id']==store_id].reset_index(drop=False)
 
 
@@ -423,8 +423,8 @@ def _make_lag_roll(base_test, target, shift_day, roll_wind):
     lag_df = base_test[['id','d',target]]
     col_name = 'rolling_mean_tmp_'+str(shift_day)+'_'+str(roll_wind)
     # lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).parallel_apply(np.mean).reset_index(0, drop=True)
-    lag_df[col_name] = lag_df.groupby(['id'])[target].rolling(roll_wind).apply(np.mean).reset_index(0, drop=True)
-    lag_df[col_name] = lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day))
+    # lag_df[col_name] = lag_df.groupby(['id'])[col_name].transform(lambda x: x.shift(shift_day))
+    lag_df[col_name] = lag_df.groupby(['id'])[target].transform(lambda x: x.shift(shift_day).rolling(roll_wind).mean()).astype(np.float16)
     return lag_df[[col_name]]
 
 def get_base_test(base_path, stores_ids=STORES_IDS, key='test'):
