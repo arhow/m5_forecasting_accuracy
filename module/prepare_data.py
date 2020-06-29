@@ -437,6 +437,10 @@ def get_base_test(base_path, stores_ids=STORES_IDS, key='test'):
         temp_df = pd.read_pickle(f'{base_path}/{key}_{store_id}_ver{VER}.pkl')
         temp_df['store_id'] = store_id
         base_test = pd.concat([base_test, temp_df]).reset_index(drop=True)
+    for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+        n_nan = base_test[col].isna().sum()
+        if n_nan > 0:
+            base_test[col] = base_test[col].astype(str).fillna('NONE').astype('category')
 
     return base_test
 
