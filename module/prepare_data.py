@@ -206,6 +206,10 @@ def extract_features(train_df, prices_df, calendar_df, target, nan_mask_d):
 
 def get_data_by_store(store_id, grid_df_path = TEMP_FEATURE_PKL):
     grid_df = pd.read_pickle(grid_df_path)
+    for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+        n_nan = grid_df[col].isna().sum()
+        if n_nan > 0:
+            grid_df[col] = grid_df[col].astype(str).fillna('NONE').astype('category')
     return grid_df[grid_df['store_id']==store_id].reset_index(drop=False)
 
 
