@@ -43,8 +43,9 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         grid_df['groups'] = grid_df['tm_y'].astype(str)
         split_groups = grid_df[train_mask]['groups']
 
+        feature_columns_i = feature_columns[store_id]
         # Main Data
-        X, y = grid_df[train_mask][feature_columns], grid_df[train_mask][target]
+        X, y = grid_df[train_mask][feature_columns_i], grid_df[train_mask][target]
 
         # Saving part of the dataset for later predictions
         # Removing features that we need to calculate recursively
@@ -106,14 +107,14 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
             grid_df = extract_sliding_shift_features(grid_df, target)
 
             for store_id in stores_ids:
-
+                feature_columns_i = feature_columns[store_id]
                 model_name = f'{base_path}/xgboost_model_{store_id}_fold{fold_}_ver{VER}.bin'
                 estimator = pickle.load(open(model_name, 'rb'))
 
                 day_mask = base_test['d'] == (END_TRAIN + PREDICT_DAY)
                 store_mask = base_test['store_id'] == store_id
                 mask = (day_mask) & (store_mask)
-                dMatrix = xgb.DMatrix(grid_df[mask][feature_columns].values)
+                dMatrix = xgb.DMatrix(grid_df[mask][feature_columns_i].values)
                 base_test.loc[mask, target] = estimator.predict(dMatrix)
 
             # Make good column naming and add
