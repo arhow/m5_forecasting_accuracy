@@ -95,8 +95,6 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path, stores_ids)
-        for col in ['event_name_1','event_type_1','event_name_2','event_type_2']:
-            base_test[col] = base_test[col].astype('category')
         main_time = time.time()
 
         for PREDICT_DAY in range(1, 29):
