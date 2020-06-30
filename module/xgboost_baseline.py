@@ -34,6 +34,12 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
         print('Train', store_id)
 
         grid_df = get_data_by_store(store_id)
+        grid_df['item_id'] = grid_df['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['dept_id'] = grid_df['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        grid_df['cat_id'] = grid_df['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+        for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+            grid_df[col] = grid_df[col].replace(
+                dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
 
         train_mask = grid_df['d'] <= END_TRAIN
         preds_mask = grid_df['d'] > (END_TRAIN - 100)
@@ -96,6 +102,12 @@ def predict_test(feature_columns, target, base_path, stores_ids=STORES_IDS):
     for fold_ in range(CV_FOLDS):
         all_preds = pd.DataFrame()
         base_test = get_base_test(base_path, stores_ids)
+        base_test['item_id'] = base_test['item_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        base_test['dept_id'] = base_test['dept_id'].apply(lambda x: int(x.split('_')[-1])).astype('category')
+        base_test['cat_id'] = base_test['cat_id'].replace({'HOBBIES': 0, 'HOUSEHOLD': 1, 'FOODS': 2}).astype('category')
+        for col in ['event_name_1', 'event_type_1', 'event_name_2', 'event_type_2']:
+            base_test[col] = base_test[col].replace(
+                dict(zip(grid_df[col].unique(), np.arange(grid_df[col].unique().shape[0])))).astype('category')
         main_time = time.time()
 
         for PREDICT_DAY in range(1, 29):
