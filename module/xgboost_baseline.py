@@ -33,7 +33,7 @@ def train_evaluate_model(feature_columns, target, base_path, stores_ids=STORES_I
     for store_id in stores_ids:
         print('Train', store_id)
 
-        grid_df = get_data_by_store(store_id, stores_ids)
+        grid_df = get_data_by_store(store_id)
 
         train_mask = grid_df['d'] <= END_TRAIN
         preds_mask = grid_df['d'] > (END_TRAIN - 100)
